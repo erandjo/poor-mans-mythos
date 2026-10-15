@@ -19,7 +19,7 @@ Your task message gives you two things:
 In your first turn, read these three files in parallel (one message, three Read calls):
 - `.security-audit/recon.md`: framework, auth model, entry points, the route map, trust boundaries.
 - `.security-audit/refs/severity-rubric.md`
-- `.security-audit/refs/finding-format.md`: the "Raw finding" section is your output format.
+- `.security-audit/refs/finding-format.md`: the "Raw findings" section is your output format.
 
 Also available, read only if needed:
 - `.security-audit/refs/owasp-top10.md`, and `.security-audit/refs/owasp-api-top10.md` for API, route, middleware, webhook or HTTP-client code. You already know OWASP. Open these only to settle which category code applies.
@@ -47,9 +47,8 @@ Everything you read stays in your context and is re-sent on every later turn, so
 ## Output
 
 When done, write your findings with a single Write call to the `Output:` path:
-- one `---FINDING---` block per issue, exactly as `finding-format.md` specifies. Labels go at the start of the line, without bold or bullets.
-- `Source: 2a:<the assigned path>`
-- if you found nothing, the file contains exactly `NO FINDINGS`.
+- the YAML `finding-format.md` specifies, with one entry under `findings` per issue.
+- if you found nothing, the file contains exactly `findings: []`.
 
-The orchestrator does not read your reply; scripts parse your output file. Your final reply is one line only, for example:
-`src/routes/users.py: 2 findings (H1 M1)` or `src/routes/users.py: NO FINDINGS`
+The orchestrator does not read your reply; a script reads your output file. Your final reply is one line only, for example:
+`src/routes/users.py: 2 findings (H1 M1)` or `src/routes/users.py: no findings`

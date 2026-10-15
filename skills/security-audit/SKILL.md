@@ -34,9 +34,9 @@ The skill is **token-heavy by design**. Phases 2a and 2b both run, and their fin
 The work happens in subagents. Your job as orchestrator is to run the phases, talk to the user, and spawn agents, while keeping your own context small. Every token in your context is re-sent on every later turn, and an audit has many turns.
 
 - **Agents write their results to files and reply with one line.** Scripts in `${CLAUDE_SKILL_DIR}/scripts/` merge, deduplicate, cluster and assemble the report from those files.
-- **Never Read or retype findings.** Don't open `findings/`, `validated/`, `clusters/`, `findings-merged.md` or the report, and never copy finding text into a prompt or a file. The scripts print everything you need to show the user. (After the audit, if the user asks about one finding, `grep -A30 'ID: F012'` is fine.)
+- **Never Read or retype findings.** Don't open `findings/`, `validated/`, `clusters/`, `findings.yaml` or the report, and never copy finding text into a prompt or a file. The scripts print everything you need to show the user. (After the audit, if the user asks about one finding, `grep -A20 'id: F012' .security-audit/findings.yaml` is fine.)
 - **Spawn prompts are two lines.** The agent definitions carry all instructions. Don't add any, and don't paste recon, references or file contents into prompts. Agents read what they need.
-- **Scripts are bash and POSIX awk.** Run them from the repo root exactly as written below, without quoting or rewriting the path, so the skill's `allowed-tools` rule matches. If one fails with "permission denied", run it as `bash <script> ...`.
+- **One script, `scripts/audit.py`, runs every step.** It is a Python script that `uv` runs with its dependencies. Run it from the repo root exactly as written below, without quoting or rewriting the path, so the skill's `allowed-tools` rule matches. If it fails with "permission denied", run it as `uv run --script <script> ...`.
 
 ## Agents
 
@@ -61,7 +61,7 @@ Each agent is restricted to Read, Grep, Glob, Bash and Write, with no MCP tools 
 ### 0.1 Set up the workspace
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/init.sh
+${CLAUDE_SKILL_DIR}/scripts/audit.py init
 ```
 
 This creates `.security-audit/`, writes the `.gitignore`, archives any previous run to `.security-audit/archive/`, stages the reference files that agents read into `.security-audit/refs/`, and splits the scenarios into one file each. If it exits non-zero, abort and report the error. Every agent depends on those files.
@@ -89,7 +89,7 @@ Write `.security-audit/recon.md`. Give the user one short paragraph: stack, auth
 ### 1.1 Scan
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/classify.sh scan
+${CLAUDE_SKILL_DIR}/scripts/audit.py scan
 ```
 
 The script enumerates the files (git-tracked plus untracked, excluding ignored files) and applies the path rules from `references/risk-rating-guide.md`. It greps the remaining files for risky primitives and prints the ones that need your decision, together with the primitives seen.
@@ -101,7 +101,7 @@ If the scan lists files needing a decision, or recon identified out-of-scope or 
 ### 1.3 Finalize
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/classify.sh finalize
+${CLAUDE_SKILL_DIR}/scripts/audit.py finalize
 ```
 
 This promotes files referenced in `recon.md`, applies your overrides, and writes `file-rankings.md` and `file-classes.tsv`. It prints the counts and the top 30 Review files in priority order.
@@ -116,7 +116,7 @@ Show the counts and the Review list the script printed, then ask:
 Then run:
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/classify.sh select <N|all>
+${CLAUDE_SKILL_DIR}/scripts/audit.py select <N|all>
 ```
 
 It writes `phase2a-files.tsv` and prints each selected file with its output path.
@@ -127,16 +127,16 @@ It writes `phase2a-files.tsv` and prints each selected file with its output path
 
 ### 2.1 Spawn
 
-Spawn the 2b and 2a agents together. Use one `scenario-runner` per scenario listed by `init.sh`, and one `file-reviewer` per line of `phase2a-files.tsv`. Keep at most ~20 agents running at once, the default concurrency limit, and send each batch in a single message. Prompts are exactly:
+Spawn the 2b and 2a agents together. Use one `scenario-runner` per scenario listed by `audit.py init`, and one `file-reviewer` per line of `phase2a-files.tsv`. Keep at most ~20 agents running at once, the default concurrency limit, and send each batch in a single message. Prompts are exactly:
 
 ```
 Scenario: S3
-Output: .security-audit/findings/2b-S3.md
+Output: .security-audit/findings/2b-S3.yaml
 ```
 
 ```
 File: src/routes/users.py
-Output: .security-audit/findings/2a-004-src__routes__users.py.md
+Output: .security-audit/findings/2a-004-src__routes__users.py.yaml
 ```
 
 Copy the output path for each file from `phase2a-files.tsv`.
@@ -146,16 +146,16 @@ Copy the output path for each file from `phase2a-files.tsv`.
 When agents complete, record what their results report, in one call per batch: phase, label, total tokens, tool uses (use `-` if unknown).
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/usage.sh 2b S3 182340 77 2a src/routes/users.py 48120 31
+${CLAUDE_SKILL_DIR}/scripts/audit.py usage 2b S3 182340 77 2a src/routes/users.py 48120 31
 ```
 
 ### 2.3 Collect and deduplicate (Phase 2c)
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/collect.sh
+${CLAUDE_SKILL_DIR}/scripts/audit.py collect
 ```
 
-The script parses all agent output files, merges duplicates mechanically (same file, overlapping lines, same OWASP category; see `finding-format.md`), assigns IDs `F001…` in severity order, and prints the summary. If it reports `MISSING` output or a file with no parseable blocks, resume that agent once to write its output in the required format (SendMessage, if available), or spawn a replacement, and then re-run `collect.sh`. If the output still can't be recovered, carry on; the report lists the gap.
+The script parses all agent output files, merges duplicates mechanically (same file, overlapping lines, same OWASP category; see `finding-format.md`), assigns IDs `F001…` in severity order, and prints the summary. If it reports `MISSING` or `UNPARSEABLE` output, resume that agent once to write its output in the required format (SendMessage, if available), or spawn a replacement, and then re-run `audit.py collect`. If the output still can't be recovered, carry on; the report lists the gap.
 
 Show the user the printed summary, then ask:
 
@@ -166,24 +166,24 @@ Show the user the printed summary, then ask:
 ## Phase 3: Clustered Validation
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/cluster.sh <N|all>
+${CLAUDE_SKILL_DIR}/scripts/audit.py cluster <N|all>
 ```
 
 The script groups the selected findings by (category, file). It then merges single findings that share a category and directory, and splits clusters larger than 10. For each cluster it prints the input and output paths. Spawn one `finding-validator` per cluster, all in parallel, within the concurrency limit:
 
 ```
-Cluster: .security-audit/clusters/C01.md
-Output: .security-audit/validated/C01.md
+Cluster: .security-audit/clusters/C01.yaml
+Output: .security-audit/validated/C01.yaml
 ```
 
-Validators run in a fresh context deliberately: they see the raw finding but none of the reviewer's reasoning trail. Record their usage with `usage.sh 3 C01 <tokens> <tool uses> ...`.
+Validators run in a fresh context deliberately: they see the raw finding but none of the reviewer's reasoning trail. Record their usage with `audit.py usage 3 C01 <tokens> <tool uses> ...`.
 
 ---
 
 ## Phase 4: Coverage and Final Report
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/report.sh "<one-line stack summary, e.g. Django 5 / Postgres / Celery>"
+${CLAUDE_SKILL_DIR}/scripts/audit.py report "<one-line stack summary, e.g. Django 5 / Postgres / Celery>"
 ```
 
 This writes `.security-audit/coverage.md` and `.security-audit/report-<date>.md`. The report contains the executive summary, confirmed findings by severity (excerpt, detail, validation, fix, data flow), adjusted findings, false positives, duplicates, unvalidated findings, coverage (per scenario, which pass found what, OWASP and API Top 10 tables, gaps, out of scope, limitations), and token usage.
@@ -198,7 +198,7 @@ Relay the summary the script printed: the report path, confirmed counts by sever
 
 ## Notes for the orchestrator
 
-- Subagents run with the audited repo as their working directory. They read `.security-audit/recon.md` and `.security-audit/refs/*`, never the plugin's `references/` directory. That's why `init.sh` stages the files.
+- Subagents run with the audited repo as their working directory. They read `.security-audit/recon.md` and `.security-audit/refs/*`, never the plugin's `references/` directory. That's why `audit.py init` stages the files.
 - Agents use the Write tool for their output file. If the session prompts for each write, the user can approve edits for the session once.
-- The `.security-audit/.gitignore` written by `init.sh` keeps quoted secrets out of commits. Never relax it.
+- The `.security-audit/.gitignore` written by `audit.py init` keeps quoted secrets out of commits. Never relax it.
 - The skill is intentionally token-heavy. Don't skip Phase 2b to save cost, and don't skip Phase 4 to save time. The user accepted the cost when they invoked the skill. The savings come from not repeating work, not from doing less of it.

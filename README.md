@@ -43,14 +43,14 @@ This is a token-heavy multi-agent skill. As rough orders of magnitude from a v0.
 
 v0.3 cuts the overhead around the review work without reducing the review itself:
 
-- Agents write findings straight to files and reply with one line; bash/awk scripts merge, deduplicate, cluster and assemble the report. The orchestrator no longer re-types every finding four or five times (which also kept verbatim excerpts from drifting).
+- Agents write findings straight to files and reply with one line; a Python script (`scripts/audit.py`) merges, deduplicate, cluster and assemble the report. The orchestrator no longer re-types every finding four or five times (which also kept verbatim excerpts from drifting).
 - Reviewers, scenario agents and validators are dedicated plugin agents (`agents/`): short spawn prompts, only Read/Grep/Glob/Bash/Write (no MCP tool definitions), per-agent effort levels, and turn caps.
 - The route map built once in recon replaces each scenario agent re-deriving the routing and middleware chain.
 - Agents are told to grep before reading and to read line ranges instead of whole files.
 
 Every run records subagent token usage in `.security-audit/usage.tsv` and in the report, so costs can be compared across runs. Agents inherit your session model; change a model or effort level in the frontmatter of the files in `agents/`.
 
-Requirements: bash and a POSIX awk (the stock macOS and Linux ones both work).
+Requirements: [uv](https://docs.astral.sh/uv/), which installs the script's Python dependencies (pandas, Jinja2, PyYAML, pathspec, Typer) on first run.
 
 ## License
 
