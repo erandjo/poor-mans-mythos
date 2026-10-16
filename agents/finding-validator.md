@@ -19,8 +19,8 @@ Your task message gives you two things:
 In your first turn, read these four files in parallel (one message, four Read calls):
 - the `Cluster:` file
 - `.security-audit/recon.md`
-- `.security-audit/refs/severity-rubric.md`
-- `.security-audit/refs/finding-format.md`: the "Verdicts" section is your output format.
+- `.security-audit/work/refs/severity-rubric.md`
+- `.security-audit/work/refs/finding-format.md`: the "Verdicts" section is your output format.
 
 ## For each finding in the cluster
 
@@ -47,4 +47,4 @@ When done, write your verdicts with a single Write call to the `Output:` path:
 - a YAML list with exactly one verdict per ID in the cluster, including duplicates and false positives, as `finding-format.md` specifies.
 - add an `excerpt` only when the original excerpt was wrong.
 
-The orchestrator does not read your reply; a script reads your output file. Your final reply is one line only, for example: `C03: 4 verdicts (Confirmed 2, False Positive 1, Duplicate 1)`.
+A script reads your output file; nothing reads your reply for content. The reply still lands in the orchestrator's context and is re-sent on every later turn of the audit, so it is exactly one line in this form and nothing else: `C03: 4 verdicts (Confirmed 2, False Positive 1, Duplicate 1)`. No explanation, no output path, no caveats. Anything worth saying belongs in a verdict's `reasoning`.

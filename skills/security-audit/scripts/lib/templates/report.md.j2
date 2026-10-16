@@ -141,7 +141,7 @@ _None._
 {% call(f) table(pending, ["ID", "Raised severity", "Title", "File", "Why"]) %}{{ f.id }} | {{ severities[f.sev] }} | {{ f.title|cell }} | {{ loc(f) }} | {{ "validator returned no verdict" if f.status == "missing" else "not selected for validation" }}{% endcall %}
 {% if pending|length %}
 
-Full details of these findings are in `{{ A }}/findings.yaml`.
+Full details of these findings are in `{{ W }}/findings.yaml` until `audit.py clean` removes it.
 {% endif %}
 
 ---

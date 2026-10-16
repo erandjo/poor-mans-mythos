@@ -79,5 +79,5 @@ confidences: [Unrated, Low, Medium, High]
 statuses: {confirm: confirmed, 'false': false positive, down: downgraded, up: upgraded, dup: duplicate}
 real_statuses: [confirmed, upgraded, downgraded]
 
-# Reference files staged into .security-audit/refs/ for the subagents.
+# Reference files staged into .security-audit/work/refs/ for the subagents.
 staged_refs: [owasp-top10.md, owasp-api-top10.md, severity-rubric.md, finding-format.md]

@@ -44,7 +44,7 @@ Rules:
 
 ### How findings are merged (Phase 2c, scripted)
 
-Two findings are duplicates when they cite the same file, their line ranges overlap, and they share an OWASP category. Findings marked `N/A` are merged only when they also share a CWE. The kept finding is the one with the higher severity, then higher confidence, then the longer `detail`. The sources and references of all merged findings are combined. Merged findings get IDs `F001`, `F002`, … ordered by severity, then file, and are written to `.security-audit/findings.yaml`.
+Two findings are duplicates when they cite the same file, their line ranges overlap, and they share an OWASP category. Findings marked `N/A` are merged only when they also share a CWE. The kept finding is the one with the higher severity, then higher confidence, then the longer `detail`. The sources and references of all merged findings are combined. Merged findings get IDs `F001`, `F002`, … ordered by severity, then file, and are written to `.security-audit/work/findings.yaml`.
 
 ---
 

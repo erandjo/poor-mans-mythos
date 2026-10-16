@@ -1,10 +1,10 @@
 {# What each audit.py step prints for the orchestrator: one macro per step. #}
 
-{% macro init(archive, scenarios) %}
-{% if archive %}
-Previous run archived to {{ archive }}
+{% macro init(cleared, scenarios) %}
+{% if cleared %}
+Cleared the previous run's working state ({{ W }}); earlier reports are kept.
 {% endif %}
-Workspace ready: {{ A }} (refs staged, {{ scenarios|length }} scenarios)
+Workspace ready: {{ W }} (refs staged, {{ scenarios|length }} scenarios)
 {% for s in scenarios|rows %}
 {{ s.id }}	{{ s.name }}
 {% endfor %}
@@ -20,7 +20,7 @@ Needs decision (path <TAB> risky primitives seen):
 {{ f.path }}	{{ f.reason|replace("signals: ", "") }}
 {% endfor %}
 {% if undecided|length > 200 %}
-... {{ undecided|length - 200 }} more: grep '^decide' {{ A }}/file-classes.base.tsv
+... {{ undecided|length - 200 }} more: grep '^decide' {{ W }}/file-classes.base.tsv
 {% endif %}
 {% endif %}
 {% endmacro %}
@@ -66,7 +66,7 @@ MISSING (agent failed or never wrote it): {{ path }}
 {% macro cluster(found) %}
 Validating {{ found.ids.str.split(",").explode()|length }} findings in {{ found|length }} clusters (cluster <TAB> input <TAB> output <TAB> label):
 {% for c in found|rows %}
-{{ c.cluster }}	{{ A }}/clusters/{{ c.cluster }}.yaml	{{ A }}/validated/{{ c.cluster }}.yaml	{{ c.label }} [{{ c.ids }}]
+{{ c.cluster }}	{{ W }}/clusters/{{ c.cluster }}.yaml	{{ W }}/validated/{{ c.cluster }}.yaml	{{ c.label }} [{{ c.ids }}]
 {% endfor %}
 {% endmacro %}
 
@@ -82,4 +82,8 @@ Confirmed:{% for s in range(4, 0, -1) %} {{ real|where(adjusted=s)|length }} {{ 
 {% for label, ids in [("no verdict for", (f|where(status="missing")).id), ("unrecognized status for", (f|where(unclear=True)).id), ("more than one verdict (last one used) for", repeated)] if ids|length %}
 WARNING: {{ label }}: {{ ids|join(" ") }}
 {% endfor %}
+{% endmacro %}
+
+{% macro clean(kept) %}
+Removed the working state ({{ W }}). Kept in {{ A }}: {{ kept|join(", ") or "nothing" }}
 {% endmacro %}

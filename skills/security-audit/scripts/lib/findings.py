@@ -6,7 +6,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from . import A, CONFIG, load, read_tsv
+from . import CONFIG, W, load, read_tsv
 
 FIELDS = ["id", "file", "lines", "title", "severity", "confidence", "owasp", "cwe", "source",
           "excerpt", "detail", "dataflow", "references"]
@@ -17,7 +17,7 @@ def agent_outputs():
     """One row per Phase 2a/2b output file. `findings` is None when the file is not valid YAML."""
     assigned = read_tsv("phase2a-files.tsv", ["file", "output"]).set_index("output").file
     rows = []
-    for path in sorted((A / "findings").glob("2[ab]-*.yaml")):
+    for path in sorted((W / "findings").glob("2[ab]-*.yaml")):
         data = load(path)
         data = data if isinstance(data, dict) and isinstance(data.get("findings"), list) else {"findings": None}
         scenario = re.match(r"2b-(S\d+)", path.name)
@@ -114,7 +114,7 @@ def judge(f):
 
 
 def prepare_verdicts():
-    found = [v for path in sorted((A / "validated").glob("*.yaml")) for v in load(path) or [] if isinstance(v, dict)]
+    found = [v for path in sorted((W / "validated").glob("*.yaml")) for v in load(path) or [] if isinstance(v, dict)]
     verdicts = pd.DataFrame(found).reindex(columns=VERDICT).fillna("").astype(str)
     return verdicts.assign(id=verdicts.id.str.strip().str.upper())
 

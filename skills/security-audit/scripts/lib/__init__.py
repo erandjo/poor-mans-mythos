@@ -5,13 +5,14 @@ import pandas as pd
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-A = Path(".security-audit")
+A = Path(".security-audit")  # what the reader keeps: the .md files (reports, coverage, recon, rankings)
+W = A / "work"  # what agents and steps pass to each other; audit.py clean removes it
 LIB = Path(__file__).parent
 CONFIG = yaml.safe_load((LIB / "config.yaml").read_text())
 
 jinja = Environment(loader=FileSystemLoader(LIB / "templates"), trim_blocks=True, lstrip_blocks=True,
                     keep_trailing_newline=True, undefined=StrictUndefined)
-jinja.globals.update(A=A, severities=CONFIG["severities"])
+jinja.globals.update(A=A, W=W, severities=CONFIG["severities"])
 jinja.filters.update(
     rows=lambda df, limit=None: df.head(limit).itertuples(),
     where=lambda df, **equal: df.loc[(df[list(equal)] == list(equal.values())).all(axis=1)],
@@ -47,11 +48,11 @@ def dump(data, path):
 
 
 def read_tsv(name, columns):
-    path = A / name
+    path = W / name
     if not path.exists() or not path.stat().st_size:
         return pd.DataFrame(columns=columns)
     return pd.read_csv(path, sep="\t", names=columns, dtype=str, keep_default_na=False).fillna("")
 
 
 def write_tsv(df, name):
-    df.to_csv(A / name, sep="\t", index=False, header=False)
+    df.to_csv(W / name, sep="\t", index=False, header=False)

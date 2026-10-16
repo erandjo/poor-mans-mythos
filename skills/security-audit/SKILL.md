@@ -25,7 +25,7 @@ Perform a full, multi-agent security audit of a repository. The audit runs in fi
 3. **Validate**: cluster findings, then validate each cluster against the actual code in a fresh context.
 4. **Coverage and report**: what was checked, what wasn't, and where confidence is low.
 
-All intermediate and final output goes to `.security-audit/` in the repo root, which gets a `.gitignore` containing `*`. Findings may quote real secrets verbatim from the code, so they must never be committed.
+Everything goes to `.security-audit/` in the repo root, which gets a `.gitignore` containing `*`. Findings may quote real secrets verbatim from the code, so they must never be committed. The reader's files sit at the top level: `report-<date>.md`, `coverage.md`, `recon.md` and `file-rankings.md`. Everything else, including `findings.yaml`, is what agents and steps pass to each other and lives in `.security-audit/work/`, which `audit.py clean` deletes at the end.
 
 The skill is **token-heavy by design**. Phases 2a and 2b both run, and their findings overlap before deduplication. Don't shortcut this.
 
@@ -34,7 +34,7 @@ The skill is **token-heavy by design**. Phases 2a and 2b both run, and their fin
 The work happens in subagents. Your job as orchestrator is to run the phases, talk to the user, and spawn agents, while keeping your own context small. Every token in your context is re-sent on every later turn, and an audit has many turns.
 
 - **Agents write their results to files and reply with one line.** Scripts in `${CLAUDE_SKILL_DIR}/scripts/` merge, deduplicate, cluster and assemble the report from those files.
-- **Never Read or retype findings.** Don't open `findings/`, `validated/`, `clusters/`, `findings.yaml` or the report, and never copy finding text into a prompt or a file. The scripts print everything you need to show the user. (After the audit, if the user asks about one finding, `grep -A20 'id: F012' .security-audit/findings.yaml` is fine.)
+- **Never Read or retype findings.** Don't open anything in `work/` other than files you write yourself (that includes `findings.yaml`), nor the report, and never copy finding text into a prompt or a file. The scripts print everything you need to show the user. (After the audit, if the user asks about one finding, `grep -A20 'id: F012' .security-audit/work/findings.yaml` is fine until you clean up.)
 - **Spawn prompts are two lines.** The agent definitions carry all instructions. Don't add any, and don't paste recon, references or file contents into prompts. Agents read what they need.
 - **One script, `scripts/audit.py`, runs every step.** It is a Python script that `uv` runs with its dependencies. Run it from the repo root exactly as written below, without quoting or rewriting the path, so the skill's `allowed-tools` rule matches. If it fails with "permission denied", run it as `uv run --script <script> ...`.
 
@@ -52,7 +52,7 @@ Each agent is restricted to Read, Grep, Glob, Bash and Write, with no MCP tools 
 
 **Fallback.** If these agent types are not available, use `general-purpose` with this prompt: `Read ${CLAUDE_PLUGIN_ROOT}/agents/<name>.md and follow its body as your instructions.` followed by the same two lines. It works the same way but costs more, because a general-purpose agent loads every tool.
 
-**Cost expectations.** As an order of magnitude from v0.2 reference runs: a scenario agent used ~180K tokens and a per-file reviewer ~50K. A full audit of a ~1,000-file repo can reach **several million tokens**. v0.3 reduces this, but there is no new baseline yet; every run now records subagent usage in `.security-audit/usage.tsv` and the report. Before Phase 1 begins, tell the user to expect a reasoning-heavy, multi-agent run.
+**Cost expectations.** As an order of magnitude from v0.2 reference runs: a scenario agent used ~180K tokens and a per-file reviewer ~50K. A full audit of a ~1,000-file repo can reach **several million tokens**. v0.3 reduces this, but there is no new baseline yet; every run now records subagent usage in the report. Before Phase 1 begins, tell the user to expect a reasoning-heavy, multi-agent run.
 
 ---
 
@@ -64,7 +64,7 @@ Each agent is restricted to Read, Grep, Glob, Bash and Write, with no MCP tools 
 ${CLAUDE_SKILL_DIR}/scripts/audit.py init
 ```
 
-This creates `.security-audit/`, writes the `.gitignore`, archives any previous run to `.security-audit/archive/`, stages the reference files that agents read into `.security-audit/refs/`, and splits the scenarios into one file each. If it exits non-zero, abort and report the error. Every agent depends on those files.
+This creates `.security-audit/`, writes the `.gitignore`, clears any working state a previous run left in `.security-audit/work/` (earlier reports are kept), stages the reference files that agents read into `.security-audit/work/refs/`, and splits the scenarios into one file each. If it exits non-zero, abort and report the error. Every agent depends on those files.
 
 ### 0.2 Build the recon document
 
@@ -96,7 +96,7 @@ The script enumerates the files (git-tracked plus untracked, excluding ignored f
 
 ### 1.2 Decide and override
 
-If the scan lists files needing a decision, or recon identified out-of-scope or vendored code, read `${CLAUDE_SKILL_DIR}/references/risk-rating-guide.md` ("Files needing a decision" and "Special cases"). Decide each listed file from its path and the primitives listed. Use `head -n 30` on several files in one Bash call only where that isn't enough. Write all decisions to `.security-audit/class-overrides.tsv`, one `bucket<TAB>path<TAB>reason` line each. Leave out files you'd default up to review anyway; finalize promotes undecided files to review.
+If the scan lists files needing a decision, or recon identified out-of-scope or vendored code, read `${CLAUDE_SKILL_DIR}/references/risk-rating-guide.md` ("Files needing a decision" and "Special cases"). Decide each listed file from its path and the primitives listed. Use `head -n 30` on several files in one Bash call only where that isn't enough. Write all decisions to `.security-audit/work/class-overrides.tsv`, one `bucket<TAB>path<TAB>reason` line each. Leave out files you'd default up to review anyway; finalize promotes undecided files to review.
 
 ### 1.3 Finalize
 
@@ -131,15 +131,15 @@ Spawn the 2b and 2a agents together. Use one `scenario-runner` per scenario list
 
 ```
 Scenario: S3
-Output: .security-audit/findings/2b-S3.yaml
+Output: .security-audit/work/findings/2b-S3.yaml
 ```
 
 ```
 File: src/routes/users.py
-Output: .security-audit/findings/2a-004-src__routes__users.py.yaml
+Output: .security-audit/work/findings/2a-004-src__routes__users.py.yaml
 ```
 
-Copy the output path for each file from `phase2a-files.tsv`.
+Copy the output path for each file from what `audit.py select` printed.
 
 ### 2.2 Record usage
 
@@ -172,8 +172,8 @@ ${CLAUDE_SKILL_DIR}/scripts/audit.py cluster <N|all>
 The script groups the selected findings by (category, file). It then merges single findings that share a category and directory, and splits clusters larger than 10. For each cluster it prints the input and output paths. Spawn one `finding-validator` per cluster, all in parallel, within the concurrency limit:
 
 ```
-Cluster: .security-audit/clusters/C01.yaml
-Output: .security-audit/validated/C01.yaml
+Cluster: .security-audit/work/clusters/C01.yaml
+Output: .security-audit/work/validated/C01.yaml
 ```
 
 Validators run in a fresh context deliberately: they see the raw finding but none of the reviewer's reasoning trail. Record their usage with `audit.py usage 3 C01 <tokens> <tool uses> ...`.
@@ -194,11 +194,26 @@ Then, optionally, Edit the report's `## Auditor Notes` section with at most five
 
 Relay the summary the script printed: the report path, confirmed counts by severity, false positives, duplicates, unvalidated findings, and any warnings. If there are Critical findings, put their titles first, above the summary.
 
+## Clean up
+
+The report is rebuilt from the working state, so clean up only once the user is done with this run. If any findings are unvalidated, end the closing message with:
+
+> "<N> findings weren't validated. Validate more before I remove the working files? Enter a number, 'all', or 'no'."
+
+If they want more, re-run Phase 3 with the new number and then Phase 4. Otherwise, or if every finding was validated, run:
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/audit.py clean
+```
+
+It deletes `.security-audit/work/` and keeps the top-level files listed above. Tell the user in one line what was kept.
+
 ---
 
 ## Notes for the orchestrator
 
-- Subagents run with the audited repo as their working directory. They read `.security-audit/recon.md` and `.security-audit/refs/*`, never the plugin's `references/` directory. That's why `audit.py init` stages the files.
+- Subagents run with the audited repo as their working directory. They read `.security-audit/recon.md` and `.security-audit/work/refs/*`, never the plugin's `references/` directory. That's why `audit.py init` stages the files.
 - Agents use the Write tool for their output file. If the session prompts for each write, the user can approve edits for the session once.
 - The `.security-audit/.gitignore` written by `audit.py init` keeps quoted secrets out of commits. Never relax it.
-- The skill is intentionally token-heavy. Don't skip Phase 2b to save cost, and don't skip Phase 4 to save time. The user accepted the cost when they invoked the skill. The savings come from not repeating work, not from doing less of it.
+- The skill is intentionally token-heavy. Don't skip Phase 2b to save cost, and don't skip Phase 4 to save time.
+- If an agent's reply runs past one line, don't answer it or repeat it. Its output file is what counts. The user accepted the cost when they invoked the skill. The savings come from not repeating work, not from doing less of it.

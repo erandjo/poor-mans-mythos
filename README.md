@@ -23,7 +23,7 @@ So here's this instead: a Claude Code plugin that uses regular Claude to do a be
 Run a security audit on this repo
 ```
 
-Claude runs a five-phase audit. All output (recon, file rankings, raw findings, validated findings, coverage, and the final report) lands in `.security-audit/`. A `.gitignore` is auto-written so findings — which may quote real secrets verbatim from your code — never end up in commits.
+Claude runs a five-phase audit. What you read lands in `.security-audit/`: the report, a standalone `coverage.md`, the recon document (`recon.md`) and the file rankings (`file-rankings.md`). The working files the agents pass to each other (raw and merged findings, clusters, verdicts, TSVs) live in `.security-audit/work/` and are deleted when the audit ends. A `.gitignore` is auto-written so findings — which may quote real secrets verbatim from your code — never end up in commits.
 
 ## How it works
 
@@ -48,7 +48,7 @@ v0.3 cuts the overhead around the review work without reducing the review itself
 - The route map built once in recon replaces each scenario agent re-deriving the routing and middleware chain.
 - Agents are told to grep before reading and to read line ranges instead of whole files.
 
-Every run records subagent token usage in `.security-audit/usage.tsv` and in the report, so costs can be compared across runs. Agents inherit your session model; change a model or effort level in the frontmatter of the files in `agents/`.
+Every run records subagent token usage in the report, so costs can be compared across runs. Agents inherit your session model; change a model or effort level in the frontmatter of the files in `agents/`.
 
 Requirements: [uv](https://docs.astral.sh/uv/), which installs the script's Python dependencies (pandas, Jinja2, PyYAML, pathspec, Typer) on first run.
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 from pathspec import PathSpec
 
-from . import A, CONFIG
+from . import CONFIG, W
 
 CLASS = ["bucket", "priority", "reason"]
 RULES = pd.DataFrame([r[:3] for r in CONFIG["rules"]] +
@@ -87,7 +87,8 @@ def finalize(df, overrides, recon):
     df.loc[defaulted,
            "reason"] = "undecided, defaulted up (" + df.reason[defaulted] + ")"
     df.loc[defaulted, CLASS[:2]] = SCRIPTED["defaulted"]
-    df.loc[overridden, CLASS] = overrides.loc[df.path[overridden], CLASS].values
+    if overridden.any():
+        df.loc[overridden, CLASS] = overrides.loc[df.path[overridden], CLASS].values
     counts = dict(promoted=promoted.sum(),
                   overrides=overridden.sum(), defaulted=defaulted.sum())
     return df.sort_values(["priority", "path"]), counts
@@ -99,4 +100,4 @@ def select(df, n):
     review = review if n == "all" else review.head(int(n))
     slug = review.str.replace(
         "/", "__").str.replace(r"[^\w.-]", "_", regex=True)
-    return pd.DataFrame({"path": review, "output": [f"{A}/findings/2a-{i:03d}-{s}.yaml" for i, s in enumerate(slug, 1)]})
+    return pd.DataFrame({"path": review, "output": [f"{W}/findings/2a-{i:03d}-{s}.yaml" for i, s in enumerate(slug, 1)]})

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import A, load, read_tsv
+from . import A, W, load, read_tsv
 from .findings import agent_outputs, judge, prepare, raw, union
 
 
@@ -23,7 +23,7 @@ def scenarios(f, outputs):
 def owasp(f, s):
     """Both OWASP lists, named from the staged references, with counts and the scenarios
     designed for each category or raising findings in it."""
-    refs = "".join((A / "refs" / name).read_text()
+    refs = "".join((W / "refs" / name).read_text()
                    for name in ("owasp-top10.md", "owasp-api-top10.md"))
     c = pd.DataFrame(re.findall(r"^# (.+?) \((\d+)\)|^## ((?:API|A)\d+):\d+ — (.+?)(?: \(.*\))?$", refs, re.M),
                      columns=["list", "year", "key", "name"])
@@ -47,7 +47,7 @@ def out_of_scope(recon):
 
 
 def context(stack):
-    f, repeated, selected = judge(prepare(load(A / "findings.yaml") or []))
+    f, repeated, selected = judge(prepare(load(W / "findings.yaml") or []))
     outputs = agent_outputs()
     s = scenarios(f, outputs)
     classes = read_tsv("file-classes.tsv",

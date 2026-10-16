@@ -2,7 +2,7 @@
 
 Phase 2a reviews files. Phase 2b reviews **questions** — the kind an attacker would ask. Each scenario below is a prompt for a single agent that runs Grep across the whole repo, follows leads, and reports findings in the standard format (`finding-format.md`).
 
-Each scenario runs in a `scenario-runner` agent (`agents/scenario-runner.md`), which carries the shared instructions: what to read, how to report, and the closing `Scenario:` / `Findings:` / `Notes:` lines. At audit time, `scripts/audit.py init` splits this file into `.security-audit/refs/scenarios/S<n>.md`, so each agent reads only its own section. Keep the `## S<n>. <Name>` heading format and the `**Covers:**` line (the OWASP categories the scenario is designed to probe); the split and the coverage report depend on them.
+Each scenario runs in a `scenario-runner` agent (`agents/scenario-runner.md`), which carries the shared instructions: what to read, how to report, and the closing `Scenario:` / `Findings:` / `Notes:` lines. At audit time, `scripts/audit.py init` splits this file into `.security-audit/work/refs/scenarios/S<n>.md`, so each agent reads only its own section. Keep the `## S<n>. <Name>` heading format and the `**Covers:**` line (the OWASP categories the scenario is designed to probe); the split and the coverage report depend on them.
 
 Scenarios are designed to be run in parallel. They will overlap with Phase 2a findings — that's fine; deduplication happens before validation.
 

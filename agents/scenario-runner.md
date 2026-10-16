@@ -18,11 +18,11 @@ Your task message gives you two things:
 
 In your first turn, read these four files in parallel (one message, four Read calls):
 - `.security-audit/recon.md`: stack, auth model, entry points, the route map, outbound surface, trust boundaries.
-- `.security-audit/refs/scenarios/<Scenario>.md`: your scenario. This is your brief.
-- `.security-audit/refs/severity-rubric.md`
-- `.security-audit/refs/finding-format.md`: the "Raw findings" section is your output format.
+- `.security-audit/work/refs/scenarios/<Scenario>.md`: your scenario. This is your brief.
+- `.security-audit/work/refs/severity-rubric.md`
+- `.security-audit/work/refs/finding-format.md`: the "Raw findings" section is your output format.
 
-Read `.security-audit/refs/owasp-top10.md` or `.security-audit/refs/owasp-api-top10.md` only if you need them to settle which category code applies.
+Read `.security-audit/work/refs/owasp-top10.md` or `.security-audit/work/refs/owasp-api-top10.md` only if you need them to settle which category code applies.
 
 ## Run the scenario
 
@@ -46,4 +46,4 @@ When done, write your output with a single Write call to the `Output:` path:
 
 Always write `notes`: it feeds the audit's coverage statement, and a zero-finding scenario counts as information. For example: "Found 14 SQL sinks; all use Knex placeholders. Two raw() calls (db/report.js:40, :88) interpolate only constants. Not reviewed: dynamic ORDER BY (none located)."
 
-The orchestrator does not read your reply; a script reads your output file. Your final reply is one line only, for example: `S3: 2 findings (H1 L1)`.
+A script reads your output file; nothing reads your reply for content. The reply still lands in the orchestrator's context and is re-sent on every later turn of the audit, so it is exactly one line in this form and nothing else: `S3: 2 findings (H1 L1)` or `S3: no findings`. No explanation, no output path, no caveats or hand-offs to other scenarios. Anything worth saying belongs in `notes`.
