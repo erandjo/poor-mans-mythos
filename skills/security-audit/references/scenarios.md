@@ -2,12 +2,7 @@
 
 Phase 2a reviews files. Phase 2b reviews **questions** — the kind an attacker would ask. Each scenario below is a prompt for a single agent that runs Grep across the whole repo, follows leads, and reports findings in the standard format (`finding-format.md`).
 
-Every scenario agent receives:
-
-- `recon.md` (project context, entry-point list).
-- `references/owasp-top10.md` and `references/owasp-api-top10.md` (read on demand).
-- `references/severity-rubric.md` and `references/finding-format.md`.
-- Read, Grep, Bash tools.
+Each scenario runs in a `scenario-runner` agent (`agents/scenario-runner.md`), which carries the shared instructions: what to read, how to report, and the closing `Scenario:` / `Findings:` / `Notes:` lines. At audit time, `scripts/audit.py init` splits this file into `.security-audit/work/refs/scenarios/S<n>.md`, so each agent reads only its own section. Keep the `## S<n>. <Name>` heading format and the `**Covers:**` line (the OWASP categories the scenario is designed to probe); the split and the coverage report depend on them.
 
 Scenarios are designed to be run in parallel. They will overlap with Phase 2a findings — that's fine; deduplication happens before validation.
 
@@ -16,6 +11,8 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 ---
 
 ## S1. Injection sinks → trust boundaries
+
+**Covers:** A05
 
 **Question:** For every place the application sends data to an interpreter (SQL, shell, template, LDAP, XPath, NoSQL, raw eval), can untrusted input reach it without parameterization or escaping?
 
@@ -37,9 +34,12 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 
 ## S2. Object-level authorization (IDOR / BOLA)
 
+**Covers:** A01, API1, API3
+
 **Question:** For every handler that accepts an object identifier from the request and reads or modifies that object, does the code verify the caller owns or is permitted to access that object?
 
 **Find candidate handlers:**
+- Start from the route map in `recon.md`: routes with an object identifier in the path, and the `Role or ownership check` column.
 - Route definitions where the path contains a parameter (`/:id`, `/{id}`, `/<int:id>`, `/{slug}`).
 - Handlers that fetch by primary key: `findById`, `find_by`, `get_object_or_404`, `Model.find\(`, `db\.query.+WHERE id =`, `db.first(:id)`.
 - Mutations that take an ID: `update_by_id`, `delete\(.+id`, `Model.destroy\(`.
@@ -52,9 +52,12 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 
 ## S3. Function-level authorization (admin / privileged paths)
 
+**Covers:** A01, API5
+
 **Question:** For every endpoint or function intended for admins / specific roles, is the role gate present, correct, and reached on every request method?
 
 **Find candidates:**
+- Start from the route map in `recon.md`: routes whose path or handler suggests a privileged function, and their `Auth / guards applied` column.
 - Path patterns: `/admin/`, `/internal/`, `/manage/`, `/staff/`, `/owner/`, anything in `recon.md` flagged as admin.
 - Function names: `admin_*`, `*_admin`, `manage_*`, `create_invite`, `change_role`, `delete_user`, `impersonate`.
 
@@ -68,6 +71,8 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 ---
 
 ## S4. Server-Side Request Forgery (SSRF)
+
+**Covers:** A01, API7
 
 **Question:** For every outbound HTTP request, can an attacker influence the destination URL?
 
@@ -90,9 +95,11 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 
 ## S5. Authentication enforcement & middleware ordering
 
+**Covers:** A01, A02, A07, API2, API8
+
 **Question:** For every route that should require authentication, does the auth middleware actually run for that route under all HTTP methods?
 
-**Find candidates:** every route from `recon.md`'s entry-point list except those listed under "Public surface."
+**Find candidates:** every route in `recon.md`'s route map, except those listed under "Public surface." The map records which guards a quick pass saw; your job is to verify them. Treat `none` and `?` entries as leads to run down, and check that the listed guard really applies before clearing any route that has one.
 
 **For each:** trace from the route registration to the auth check. Confirm:
 - The middleware is mounted on the path, not bypassed by a more specific route registered earlier.
@@ -109,6 +116,8 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 ---
 
 ## S6. Cryptographic primitives
+
+**Covers:** A04, A07
 
 **Question:** Where the application performs hashing, encryption, signing, or random generation, are the primitives appropriate and used correctly?
 
@@ -129,6 +138,8 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 
 ## S7. Untrusted deserialization
 
+**Covers:** A08
+
 **Question:** Where the application deserializes data from outside its own runtime, can the resulting object instantiate arbitrary classes or trigger code execution?
 
 **Find usages:**
@@ -146,6 +157,8 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 
 ## S8. Resource consumption / abuse
 
+**Covers:** A06, A10, API4, API6
+
 **Question:** Where can a single request cause disproportionate resource use (CPU, memory, money, third-party rate limits)?
 
 **Find candidates:**
@@ -162,6 +175,8 @@ Grep patterns below are starters. Reviewers must adapt them to the project's act
 ---
 
 ## S9. Logging & data exposure
+
+**Covers:** A09, A02
 
 **Question:** What does the app log, and what does it expose in errors?
 
@@ -184,6 +199,8 @@ Missing logging on these is `Low` severity unless the user has flagged complianc
 
 ## S10. Mishandling exceptional conditions
 
+**Covers:** A10
+
 **Question:** When something goes wrong, does the system fail closed and clean up?
 
 **Find:**
@@ -195,28 +212,3 @@ Missing logging on these is `Low` severity unless the user has flagged complianc
 - Null / nil dereferences reachable via crafted input (specifically: optional chaining missing on data from request → field assumed present).
 
 **Confirm:** the pattern is reachable from external input, not just an internal helper.
-
----
-
-## How an agent runs a scenario
-
-1. Read `recon.md` end-to-end.
-2. Read this scenario's section.
-3. Execute the relevant Greps. Adapt patterns to the project's language and conventions.
-4. For each candidate hit, inspect the file and follow the trail (callers, callees, registered middleware, schema definitions, ORM models — whichever the scenario needs).
-5. Emit one `---FINDING---` block per distinct issue. If the same root cause appears in many places, file once with `References:` listing the call sites.
-6. End the response with a single line: `Scenario: <S#> <name>` followed by `Findings: <count>`. This is parsed by the orchestrator.
-
----
-
-## When a scenario produces no findings
-
-Emit:
-
-```
-Scenario: <S#> <name>
-Findings: 0
-Notes: <1-3 sentences on what was checked, what was searched for, and any uncertainty. e.g. "Found 14 SQL sinks; all use parameterized queries via Knex placeholders. Two raw().select() usages exist (file:line) — both interpolate only constants. Not reviewed: dynamic ORDER BY clauses (none located via grep)."
-```
-
-The `Notes:` field feeds Phase 4 coverage. A scenario with zero findings is *information*, not silence.
